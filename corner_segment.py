@@ -165,6 +165,8 @@ class App(QMainWindow):
             msg.exec()
             return
 
+        I = self.gaussianFiltering(3, 1)
+
         return NotImplemented
 
     def segmentationButtonClicked(self):
@@ -180,6 +182,33 @@ class App(QMainWindow):
             return
 
         return NotImplemented
+
+    def gaussianFiltering(self, size, sigma):
+        height, width, channels = self.cornerImage.shape
+
+        extendedSize = size-1
+        start = int(extendedSize / 2)
+        endH = start + height
+        endW = start + width
+
+        kernel = np.zeros((size,size), dtype=float)
+
+        for x in range(size):
+            for y in range(size):
+                kernel[x,y] = (1/(2*np.pi*sigma**2))*np.exp(-((x-start)**2 + (y-start)**2)/(2*sigma**2))
+
+        extendedIm = np.zeros((height+extendedSize, width+extendedSize, channels))
+        extendedIm[start:endH,start:endW] = self.cornerImage
+
+        I = np.zeros((height, width, channels))
+        kernelSum = np.sum(kernel)
+
+        for h in range(height):
+            for w in range(width):
+                for c in range(channels):
+                    I[h, w, c] = np.sum(kernel*extendedIm[h:h+size,w:w+size,c]) / kernelSum
+
+        return I
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
