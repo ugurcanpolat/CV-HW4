@@ -197,9 +197,9 @@ class App(QMainWindow):
                 kernel[x,y] = (1/(2*np.pi*sigma**2))*np.exp(-((x-start)**2 + (y-start)**2)/(2*sigma**2))
 
         extendedIm = np.zeros((height+extendedSize, width+extendedSize))
-        extendedIm[start:endH,start:endW] = self.cornerImage
+        extendedIm[start:endH,start:endW] = self.cornerImage.copy()
 
-        I = np.zeros((height, width))
+        I = self.cornerImage.copy()
         kernelSum = np.sum(kernel)
 
         for h in range(height):
