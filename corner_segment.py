@@ -30,11 +30,10 @@ class App(QMainWindow):
 
     def addImageToGroupBox(self, image, groupBox, labelString):
         # Get the height, width information
-        height, width, channel = image.shape
-        bytesPerLine = 3 * width # 3 Channels
+        height, width= image.shape
+        bytesPerLine = width # 1-channel
 
-        # Swap the channels from BGR to RGB
-        qImg = QImage(image.data, width, height, bytesPerLine, QImage.Format_RGB888).rgbSwapped()
+        qImg = QImage(image.data, width, height, bytesPerLine, QImage.Format_Grayscale8)
 
         pix = QPixmap(qImg)
 
@@ -67,7 +66,7 @@ class App(QMainWindow):
         if self.cornerLoaded:
             self.deleteItemsFromWidget(self.cornerGroupBox.layout())
 
-        self.cornerImage = cv2.imread(fName[0]) # Read the image
+        self.cornerImage = cv2.imread(fName[0], cv2.IMREAD_GRAYSCALE) # Read the image
         self.cornerLoaded = True
 
         self.addImageToGroupBox(self.cornerImage, self.cornerGroupBox, 'Corner image')
@@ -84,7 +83,7 @@ class App(QMainWindow):
         if self.segmentLoaded:
             self.deleteItemsFromWidget(self.segmentGroupBox.layout())
 
-        self.segmentImage = cv2.imread(fName[0]) # Read the image
+        self.segmentImage = cv2.imread(fName[0], cv2.IMREAD_GRAYSCALE) # Read the image
         self.segmentLoaded = True
 
         self.addImageToGroupBox(self.segmentImage, self.segmentGroupBox, 'MR image')
@@ -184,7 +183,7 @@ class App(QMainWindow):
         return NotImplemented
 
     def gaussianFiltering(self, size, sigma):
-        height, width, channels = self.cornerImage.shape
+        height, width = self.cornerImage.shape
 
         extendedSize = size-1
         start = int(extendedSize / 2)
@@ -197,16 +196,15 @@ class App(QMainWindow):
             for y in range(size):
                 kernel[x,y] = (1/(2*np.pi*sigma**2))*np.exp(-((x-start)**2 + (y-start)**2)/(2*sigma**2))
 
-        extendedIm = np.zeros((height+extendedSize, width+extendedSize, channels))
+        extendedIm = np.zeros((height+extendedSize, width+extendedSize))
         extendedIm[start:endH,start:endW] = self.cornerImage
 
-        I = np.zeros((height, width, channels))
+        I = np.zeros((height, width))
         kernelSum = np.sum(kernel)
 
         for h in range(height):
             for w in range(width):
-                for c in range(channels):
-                    I[h, w, c] = np.sum(kernel*extendedIm[h:h+size,w:w+size,c]) / kernelSum
+                I[h, w] = np.sum(kernel*extendedIm[h:h+size,w:w+size]) / kernelSum
 
         return I
 
