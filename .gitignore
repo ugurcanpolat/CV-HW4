@@ -3,3 +3,7 @@
 
 # Exclude assignment file
 *.pdf
+
+# Exclude report file
+*.docx
+*.doc

@@ -30,10 +30,10 @@ class App(QMainWindow):
 
     def addImageToGroupBox(self, image, groupBox, labelString):
         # Get the height, width information
-        height, width= image.shape
-        bytesPerLine = width # 1-channel
+        height, width, channel = image.shape
+        bytesPerLine = channel * width # 3-channel image
 
-        qImg = QImage(image.data, width, height, bytesPerLine, QImage.Format_Grayscale8)
+        qImg = QImage(image.data, width, height, bytesPerLine, QImage.Format_RGB888).rgbSwapped()
 
         pix = QPixmap(qImg)
 
@@ -66,7 +66,7 @@ class App(QMainWindow):
         if self.cornerLoaded:
             self.deleteItemsFromWidget(self.cornerGroupBox.layout())
 
-        self.cornerImage = cv2.imread(fName[0], cv2.IMREAD_GRAYSCALE) # Read the image
+        self.cornerImage = cv2.imread(fName[0]) # Read the image
         self.cornerLoaded = True
 
         self.addImageToGroupBox(self.cornerImage, self.cornerGroupBox, 'Corner image')
@@ -83,7 +83,7 @@ class App(QMainWindow):
         if self.segmentLoaded:
             self.deleteItemsFromWidget(self.segmentGroupBox.layout())
 
-        self.segmentImage = cv2.imread(fName[0], cv2.IMREAD_GRAYSCALE) # Read the image
+        self.segmentImage = cv2.imread(fName[0]) # Read the image
         self.segmentLoaded = True
 
         self.addImageToGroupBox(self.segmentImage, self.segmentGroupBox, 'MR image')
@@ -164,7 +164,11 @@ class App(QMainWindow):
             msg.exec()
             return
 
-        I = self.gaussianFiltering(3, 1)
+        # Convert image to grayscale
+        grayscaleImage = cv2.cvtColor(self.cornerImage, cv2.COLOR_BGR2GRAY)
+
+        # Get rid of noise
+        I = self.gaussianFiltering(grayscaleImage, 3, 1)
 
         return NotImplemented
 
@@ -182,31 +186,31 @@ class App(QMainWindow):
 
         return NotImplemented
 
-    def gaussianFiltering(self, size, sigma):
-        height, width = self.cornerImage.shape
+    def gaussianFiltering(self, image, size, sigma):
+        height, width = image.shape
 
         extendedSize = size-1
         start = int(extendedSize / 2)
         endH = start + height
         endW = start + width
 
-        kernel = np.zeros((size,size), dtype=float)
+        kernel = np.zeros((size,size), dtype=np.float64)
 
         for x in range(size):
             for y in range(size):
                 kernel[x,y] = (1/(2*np.pi*sigma**2))*np.exp(-((x-start)**2 + (y-start)**2)/(2*sigma**2))
 
-        extendedIm = np.zeros((height+extendedSize, width+extendedSize))
-        extendedIm[start:endH,start:endW] = self.cornerImage.copy()
+        extendedIm = np.zeros((height+extendedSize, width+extendedSize), dtype=np.float64)
+        extendedIm[start:endH,start:endW] = image.astype(np.float64)
 
-        I = self.cornerImage.copy()
-        kernelSum = np.sum(kernel)
+        I = image.copy()
+        kernelSum = np.sum(kernel, dtype=np.float64)
 
         for h in range(height):
             for w in range(width):
-                I[h, w] = np.sum(kernel*extendedIm[h:h+size,w:w+size]) / kernelSum
+                I[h, w] = np.sum(kernel*extendedIm[h:h+size,w:w+size], dtype=np.float64) / kernelSum
 
-        return I
+        return np.round(I).astype(np.uint8)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
