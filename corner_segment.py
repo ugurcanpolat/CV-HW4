@@ -170,7 +170,44 @@ class App(QMainWindow):
         # Get rid of noise
         I = self.gaussianFiltering(grayscaleImage, 3, 1)
 
-        return NotImplemented
+        height, width = I.shape
+
+        Ix = np.zeros((height, width), dtype=np.float64) # Gradient x
+        Iy = np.zeros((height, width), dtype=np.float64) # Gradient y
+
+        I = I.astype(np.float64)
+
+        for h in range(1,height-1):
+            for w in range(1,width-1):
+                Ix[h,w] = (I[h+1,w] - I[h-1,w]) / 2 # X gradient of image pixel
+                Iy[h,w] = (I[h,w+1] - I[h,w-1]) / 2 # Y gradient of image pixel
+
+        Ix2 = Ix*Ix # square of Ix
+        Iy2 = Iy*Iy # square of Iy
+        Ixy = Ix*Iy # Ix * Iy
+
+        k = 0.04
+        threshold = 530000
+
+        imageCopy = self.cornerImage.copy()
+
+        for h in range(3,height-3):
+            for w in range(3,width-3):
+                G = np.zeros((2,2), dtype=np.float64)
+                G[0,0] = np.sum(Ix2[h-1:h+2,w-1:w+2], dtype=np.float64)
+                G[0,1] = np.sum(Ixy[h-1:h+2,w-1:w+2], dtype=np.float64)
+                G[1,0] = np.sum(Ixy[h-1:h+2,w-1:w+2], dtype=np.float64)
+                G[1,1] = np.sum(Iy2[h-1:h+2,w-1:w+2], dtype=np.float64)
+
+                det = (G[0,0]*G[1,1])-(G[0,1]*G[1,0])
+                trace = G[0,0] + G[1,1]
+                harris = det - k*(trace*trace)
+
+                if harris > threshold:
+                    cv2.circle(imageCopy, (w,h), 2, (0,255,0), cv2.FILLED, cv2.LINE_AA, 0)
+
+        self.deleteItemsFromWidget(self.cornerGroupBox.layout())
+        self.addImageToGroupBox(imageCopy, self.cornerGroupBox, 'Corner image')
 
     def segmentationButtonClicked(self):
         if not self.segmentLoaded:
