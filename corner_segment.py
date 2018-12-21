@@ -12,6 +12,7 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
+import random
 
 class App(QMainWindow):
     def __init__(self):
@@ -221,7 +222,118 @@ class App(QMainWindow):
             msg.exec()
             return
 
-        return NotImplemented
+        # Convert image to grayscale
+        grayscaleImage = cv2.cvtColor(self.segmentImage, cv2.COLOR_BGR2GRAY)
+
+        height, width = grayscaleImage.shape
+
+        mask = grayscaleImage.copy()
+        maskThreshold = 60
+
+        for h in range(height):
+            for w in range(width):
+                if(mask[h,w] < maskThreshold):
+                    mask[h,w] = 0
+                else:
+                    mask[h,w] = 255
+
+        kernel = np.ones((10,10), dtype=np.uint8)
+        brainMask = cv2.erode(mask, kernel, iterations = 2) # Remove skull
+        brainMask = cv2.dilate(brainMask, kernel, iterations = 2) # Recover size
+
+        segmented = self.kMeansClustering(grayscaleImage, brainMask)
+
+        tumor = segmented.copy()
+        for h in range(height):
+            for w in range(width):
+                if segmented[h,w] == 255:
+                    tumor[h,w] = 255
+                else:
+                    tumor[h,w] = 0
+
+        kernel = np.ones((3,3), dtype=np.uint8)
+        tumor = cv2.morphologyEx(tumor, cv2.MORPH_CLOSE, kernel)
+        tumorBound = cv2.morphologyEx(tumor, cv2.MORPH_GRADIENT, kernel)
+
+        image = cv2.cvtColor(grayscaleImage, cv2.COLOR_GRAY2RGB)
+
+        for h in range(height):
+            for w in range(width):
+                if tumorBound[h,w] == 255:
+                    image[h,w,0] = 255
+                    image[h,w,1] = 0
+                    image[h,w,2] = 0
+
+        tumorImage = cv2.cvtColor(tumorBound, cv2.COLOR_GRAY2RGB)
+
+        self.deleteItemsFromWidget(self.segmentGroupBox.layout())
+        self.addImageToGroupBox(image, self.segmentGroupBox, 'MR image')
+
+    def kMeansClustering(self, image, mask):
+        height, width = image.shape
+
+        # Randomly pick cluster centers (centroids)
+        center1 = np.zeros(2, dtype=int)
+        center2 = np.zeros(2, dtype=int)
+
+        imageCopy = image.copy().astype(int)
+
+        while mask[center1[0], center1[1]] == 0:
+            center1[0] = random.randrange(height)
+            center1[1] = random.randrange(width)
+
+        while mask[center2[0], center2[1]] == 0:
+            center2[0] = random.randrange(height)
+            center2[1] = random.randrange(width)
+
+        tolerance = int(round((height*width) * 1 / 100))
+        change = tolerance+1
+
+        segmentationImage = np.full((height,width), 2, dtype=int)
+        centersTotal = np.zeros((2,3), dtype=int)
+        while change > tolerance:
+            change = 0
+            centersTotal = np.zeros((2,3), dtype=int)
+            for h in range(height):
+                for w in range(width):
+                    if mask[h,w] == 255:
+                        differences = np.zeros(2, dtype=int)
+                        differences[0] = abs(imageCopy[h,w] - imageCopy[center1[0],center1[1]])
+                        differences[1] = abs(imageCopy[h,w] - imageCopy[center2[0],center2[1]])
+
+                        if (differences[0] == differences[1]):
+                            cluster = random.randrange(2)
+                        else:
+                            cluster = np.argmin(differences)
+
+                        if segmentationImage[h,w] != cluster:
+                            change += 1
+
+                        centersTotal[cluster, 0] += h
+                        centersTotal[cluster, 1] += w
+                        centersTotal[cluster, 2] += 1
+                        segmentationImage[h,w] = cluster
+
+            center1[0] = int(round(centersTotal[0, 0] / centersTotal[0, 2]))
+            center1[1] = int(round(centersTotal[0, 1] / centersTotal[0, 2]))
+
+            center2[0] = int(round(centersTotal[1, 0] / centersTotal[1, 2]))
+            center2[1] = int(round(centersTotal[1, 1] / centersTotal[1, 2]))
+
+        colors = np.full(2, 255, dtype=np.uint8)
+        if centersTotal[0,2] > centersTotal[1,2]:
+            colors[0] = 127
+        else:
+            colors[1] = 127
+
+        for h in range(height):
+            for w in range(width):
+                if mask[h,w] == 255:
+                    imageCopy[h,w] = colors[segmentationImage[h,w]]
+                else:
+                    imageCopy[h,w] = 0
+
+        return imageCopy.astype(np.uint8)
 
     def gaussianFiltering(self, image, size, sigma):
         height, width = image.shape
